@@ -1,5 +1,6 @@
-using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using Npgsql.EntityFrameworkCore.PostgreSQL;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -70,17 +71,32 @@ public class LibraryContext : DbContext
 
     protected override void OnConfiguring(DbContextOptionsBuilder o)
     {
-        var connString = Environment.GetEnvironmentVariable("DATABASE_URL");
+        var connUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
 
-        if (string.IsNullOrEmpty(connString))
+        if (string.IsNullOrEmpty(connUrl))
         {
-            // Yerel bilgisayarýn için SQL Server
+            // Yerel çalýþma (SQL Server)
             o.UseSqlServer(@"Server=(localdb)\mssqllocaldb;Database=LibraryDB;Trusted_Connection=True;");
         }
         else
         {
-            // Bulut (Render/Neon) için PostgreSQL
-            o.UseNpgsql(connString);
+            // Neon.tech URI formatýný (postgresql://...) Npgsql formatýna çeviriyoruz
+            var databaseUri = new Uri(connUrl);
+            var userInfo = databaseUri.UserInfo.Split(':');
+
+            var builder = new Npgsql.NpgsqlConnectionStringBuilder
+            {
+                Host = databaseUri.Host,
+                Port = databaseUri.Port,
+                Username = userInfo[0],
+                Password = userInfo[1],
+                Database = databaseUri.LocalPath.TrimStart('/'),
+                SslMode = SslMode.Require,
+                TrustServerCertificate = true,
+                IncludeErrorDetail = true
+            };
+
+            o.UseNpgsql(builder.ConnectionString);
         }
     }
 }

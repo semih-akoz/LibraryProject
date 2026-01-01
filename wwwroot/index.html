@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <title>Gelişmiş Kütüphane Paneli</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f4f7f6;
+            padding-top: 30px;
+        }
+
+        .card {
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: 0.3s;
+        }
+
+            .card:hover {
+                transform: scale(1.02);
+            }
+
+        .available {
+            border-left: 5px solid #198754;
+        }
+
+        .busy {
+            border-left: 5px solid #dc3545;
+        }
+
+        .return-date {
+            font-size: 0.85rem;
+            color: #dc3545;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <div class="row">
+            <div class="col-md-4">
+                <div class="card p-4 mb-4">
+                    <h4>🆕 Yeni Kitap Ekle</h4>
+                    <div class="mb-3">
+                        <input type="text" id="newTitle" class="form-control" placeholder="Kitap Adı">
+                    </div>
+                    <div class="mb-3">
+                        <input type="text" id="newAuthor" class="form-control" placeholder="Yazar Adı">
+                    </div>
+                    <button onclick="addBook()" class="btn btn-success w-100">Kütüphaneye Ekle</button>
+                </div>
+
+                <div class="card p-4">
+                    <h4>🔍 Arama</h4>
+                    <input type="text" id="searchInput" class="form-control" placeholder="Kitap veya yazar ara..." onkeyup="getBooks()">
+                </div>
+            </div>
+
+            <div class="col-md-8">
+                <h2 class="mb-4 text-primary">📚 Kitap Koleksiyonu</h2>
+                <div id="bookList" class="row"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = "https://localhost:7200/api/Books";
+
+        async function getBooks() {
+            const search = document.getElementById('searchInput').value;
+            const response = await fetch(`${API_URL}?search=${search}`);
+            const books = await response.json();
+
+            const listDiv = document.getElementById('bookList');
+            listDiv.innerHTML = "";
+
+            books.forEach(book => {
+                // Tarih formatlama
+                let dateInfo = "";
+                if (!book.isAvailable && book.returnDate) {
+                    const date = new Date(book.returnDate).toLocaleDateString('tr-TR');
+                    dateInfo = `<div class="return-date">📅 İade: ${date}</div>`;
+                }
+
+                listDiv.innerHTML += `
+                        <div class="col-md-6 mb-3">
+                            <div class="card p-3 ${book.isAvailable ? 'available' : 'busy'}">
+                                <h5>${book.title}</h5>
+                                <p class="text-muted mb-1">Yazar: ${book.author || 'Belirtilmemiş'}</p>
+                                ${dateInfo}
+                                <div class="d-flex gap-2 mt-3">
+                                    ${book.isAvailable
+                        ? `<button class="btn btn-sm btn-primary" onclick="lendBook(${book.id})">Ödünç Al</button>`
+                        : `<button class="btn btn-sm btn-warning" onclick="returnBook(${book.id})">İade Et</button>`
+                    }
+                                    <button class="btn btn-sm btn-outline-danger" onclick="deleteBook(${book.id})">Sil</button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+            });
+        }
+
+        async function addBook() {
+            const title = document.getElementById('newTitle').value;
+            const author = document.getElementById('newAuthor').value;
+            if (!title || !author) return alert("Lütfen tüm alanları doldurun!");
+
+            await fetch(API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ title, author, isAvailable: true })
+            });
+
+            document.getElementById('newTitle').value = "";
+            document.getElementById('newAuthor').value = "";
+            getBooks();
+        }
+
+        async function lendBook(id) {
+            const res = await fetch(`${API_URL}/${id}/lend`, { method: 'POST' });
+            if (res.ok) getBooks();
+        }
+
+        async function returnBook(id) {
+            const res = await fetch(`${API_URL}/${id}/return`, { method: 'POST' });
+            if (res.ok) getBooks();
+        }
+
+        async function deleteBook(id) {
+            if (confirm("Bu kitabı silmek istediğine emin misin?")) {
+                await fetch(`${API_URL}/${id}`, { method: 'DELETE' });
+                getBooks();
+            }
+        }
+
+        getBooks();
+    </script>
+</body>
+</html>

@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Mvc;
+using Npgsql.EntityFrameworkCore.PostgreSQL;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -8,9 +9,10 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// Veritabaný baðlamýný (Context) kaydediyoruz
+// Veritabaný baðlamý
 builder.Services.AddDbContext<LibraryContext>();
 
+// CORS Ayarý - Tarayýcý hatalarýný önlemek için þart
 builder.Services.AddCors(options => {
     options.AddPolicy("AllowAll", policy => {
         policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader();
@@ -19,58 +21,65 @@ builder.Services.AddCors(options => {
 
 var app = builder.Build();
 
-// --- 2. MIDDLEWARE AYARLARI ---
+// --- VERÝTABANI TABLOLARINI OTOMATÝK OLUÞTURMA ---
+// Bu blok uygulama her baþladýðýnda tablolarý kontrol eder ve yoksa oluþturur.
+using (var scope = app.Services.CreateScope())
+{
+    var context = scope.ServiceProvider.GetRequiredService<LibraryContext>();
+    context.Database.EnsureCreated();
+}
+
+// --- 2. MIDDLEWARE SIRALAMASI (ÇOK KRÝTÝK) ---
+// Sýralama yanlýþ olduðunda 404 veya HTML hatalarý alýnýr.
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
 }
 
-app.UseHttpsRedirection();
-app.UseDefaultFiles(); // index.html'i varsayýlan sayfa yapar
-app.UseStaticFiles();  // wwwroot içindeki dosyalarýn okunmasýný saðlar
+// Render üzerinde HTTPS yönlendirmesi bazen port çakýþmasý yapar, 
+// Render zaten SSL saðladýðý için bunu kapalý tutmak daha güvenlidir.
+// app.UseHttpsRedirection(); 
+
+app.UseDefaultFiles();
+app.UseStaticFiles();
+app.UseRouting();
 app.UseCors("AllowAll");
 app.UseAuthorization();
+
 app.MapControllers();
+app.MapFallbackToFile("index.html"); // Yollar karýþýrsa index.html'e geri döner
 
 app.Run();
 
-// --- MODELLER VE VERÝTABANI BAÐLAMI ---
+// --- MODELLER ---
 public class Book
 {
     public int Id { get; set; }
     public string Title { get; set; }
-
-    public string Author { get; set; } // YENÝ: Yazar ismi
+    public string Author { get; set; }
     public bool IsAvailable { get; set; } = true;
-    public DateTime? ReturnDate { get; set; } // Kitabýn geleceði tarih
+    public DateTime? ReturnDate { get; set; }
 }
 
-//public class LibraryContext : DbContext
-//{
-//    public DbSet<Book> Books { get; set; }
-
-//    protected override void OnConfiguring(DbContextOptionsBuilder o) =>
-//        o.UseSqlServer(@"Server=(localdb)\mssqllocaldb;Database=LibraryDB;Trusted_Connection=True;");
-//}
-
+// --- VERÝTABANI BAÐLAMI ---
 public class LibraryContext : DbContext
 {
     public DbSet<Book> Books { get; set; }
 
     protected override void OnConfiguring(DbContextOptionsBuilder o)
     {
-        // Render.com'a ekleyeceðimiz DATABASE_URL deðiþkenini kontrol eder
         var connString = Environment.GetEnvironmentVariable("DATABASE_URL");
 
         if (string.IsNullOrEmpty(connString))
         {
-            // YERELDEYSEN: Senin SQL Server'ýný kullanýr
+            // Yerel bilgisayarýn için SQL Server
             o.UseSqlServer(@"Server=(localdb)\mssqllocaldb;Database=LibraryDB;Trusted_Connection=True;");
         }
         else
         {
-            // BULUTTAYSAN: Neon.tech PostgreSQL'ini kullanýr
+            // Bulut (Render/Neon) için PostgreSQL
             o.UseNpgsql(connString);
         }
     }

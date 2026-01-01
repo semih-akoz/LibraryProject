@@ -46,10 +46,32 @@ public class Book
     public DateTime? ReturnDate { get; set; } // Kitabýn geleceði tarih
 }
 
+//public class LibraryContext : DbContext
+//{
+//    public DbSet<Book> Books { get; set; }
+
+//    protected override void OnConfiguring(DbContextOptionsBuilder o) =>
+//        o.UseSqlServer(@"Server=(localdb)\mssqllocaldb;Database=LibraryDB;Trusted_Connection=True;");
+//}
+
 public class LibraryContext : DbContext
 {
     public DbSet<Book> Books { get; set; }
 
-    protected override void OnConfiguring(DbContextOptionsBuilder o) =>
-        o.UseSqlServer(@"Server=(localdb)\mssqllocaldb;Database=LibraryDB;Trusted_Connection=True;");
+    protected override void OnConfiguring(DbContextOptionsBuilder o)
+    {
+        // Render.com'a ekleyeceðimiz DATABASE_URL deðiþkenini kontrol eder
+        var connString = Environment.GetEnvironmentVariable("DATABASE_URL");
+
+        if (string.IsNullOrEmpty(connString))
+        {
+            // YERELDEYSEN: Senin SQL Server'ýný kullanýr
+            o.UseSqlServer(@"Server=(localdb)\mssqllocaldb;Database=LibraryDB;Trusted_Connection=True;");
+        }
+        else
+        {
+            // BULUTTAYSAN: Neon.tech PostgreSQL'ini kullanýr
+            o.UseNpgsql(connString);
+        }
+    }
 }

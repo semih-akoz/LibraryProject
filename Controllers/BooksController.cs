@@ -44,10 +44,19 @@ namespace LibraryProject.Controllers
             if (!book.IsAvailable) return BadRequest("Kitap zaten ödünç verilmiş.");
 
             book.IsAvailable = false;
-            book.ReturnDate = DateTime.Now.AddDays(14); // 14 gün sonrasını ayarlar
-            _db.SaveChanges();
-            return Ok(new { message = $"{book.Title} ödünç alındı. İade tarihi: {book.ReturnDate}" });
+            // .UtcNow kullanarak PostgreSQL uyumluluk hatasını çözüyoruz
+            book.ReturnDate = DateTime.UtcNow.AddDays(14);
+            
+            // _db.SaveChanges();
+            // return Ok(new { message = $"{book.Title} ödünç alındı. İade tarihi: {book.ReturnDate}" });
+            
+            _db.SaveChanges(); 
+            return Ok(new { 
+                message = $"{book.Title} ödünç alındı.", 
+                returnDate = book.ReturnDate?.ToString("dd.MM.yyyy")
+            });
         }
+        
 
         // İADE ETME (Yeni Eklenen)
         [HttpPost("{id}/return")]

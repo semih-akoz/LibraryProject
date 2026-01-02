@@ -2,17 +2,19 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 
+AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
+
 var builder = WebApplication.CreateBuilder(args);
 
-// --- 1. SERVÝS KAYITLARI ---
+// --- 1. SERVÄ°S KAYITLARI ---
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// Veritabaný baðlamý
+// VeritabanÄ± baÄŸlamÄ±
 builder.Services.AddDbContext<LibraryContext>();
 
-// CORS Ayarý
+// CORS AyarÄ±
 builder.Services.AddCors(options => {
     options.AddPolicy("AllowAll", policy => {
         policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader();
@@ -21,17 +23,19 @@ builder.Services.AddCors(options => {
 
 var app = builder.Build();
 
-// --- VERÝTABANI TABLOLARINI OTOMATÝK OLUÞTURMA ---
+// --- VERÄ°TABANI TABLOLARINI OTOMATÄ°K OLUÅžTURMA ---
 using (var scope = app.Services.CreateScope())
 {
     var context = scope.ServiceProvider.GetRequiredService<LibraryContext>();
     try
     {
+        // Uygulama baÅŸlarken tabloyu kontrol eder/oluÅŸturur
         context.Database.EnsureCreated();
+        Console.WriteLine("VeritabanÄ± baÄŸlantÄ±sÄ± ve tablo kontrolÃ¼ baÅŸarÄ±lÄ±.");
     }
     catch (Exception ex)
     {
-        Console.WriteLine("Veritabaný oluþturma hatasý: " + ex.Message);
+        Console.WriteLine("VeritabanÄ± tablosu hatasÄ±: " + ex.Message);
     }
 }
 
@@ -63,29 +67,34 @@ public class Book
     public DateTime? ReturnDate { get; set; }
 }
 
-// --- VERÝTABANI BAÐLAMI ---
+// --- VERÄ°TABANI BAÄžLAMI ---
 public class LibraryContext : DbContext
 {
     public DbSet<Book> Books { get; set; }
 
     protected override void OnConfiguring(DbContextOptionsBuilder o)
     {
-        var connUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
+        // Ã–nce Render Ã¼zerindeki deÄŸiÅŸkeni kontrol et
+        var envConnection = Environment.GetEnvironmentVariable("DATABASE_URL");
 
-        if (string.IsNullOrEmpty(connUrl))
+        if (!string.IsNullOrEmpty(envConnection))
         {
-            // Yerel SQL Server
-            o.UseSqlServer(@"Server=(localdb)\mssqllocaldb;Database=LibraryDB;Trusted_Connection=True;");
+            // Render Ã¼zerindeysek (PostgreSQL)
+            o.UseNpgsql(envConnection);
         }
         else
         {
-            // Render/Neon PostgreSQL - En sade ve güvenli baðlantý yöntemi
-            // Eðer baþýnda 'psql ' veya týrnak varsa onlarý temizle
-            var cleanString = connUrl.Replace("psql ", "").Replace("'", "").Trim();
-
-            o.UseNpgsql(cleanString, npgsqlOptions => {
-                npgsqlOptions.EnableRetryOnFailure(5, TimeSpan.FromSeconds(10), null);
-            });
+            // Bilgisayarda (Local) Ã§alÄ±ÅŸÄ±yorsan SQL Server kullan
+            o.UseSqlServer(@"Server=(localdb)\mssqllocaldb;Database=LibraryDB;Trusted_Connection=True;");
         }
     }
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<Book>().ToTable("Books");
+        
+        // Kolon isimlerini kodla birebir eÅŸliyoruz
+        modelBuilder.Entity<Book>().Property(b => b.IsAvailable).HasColumnName("IsAvailable");
+        modelBuilder.Entity<Book>().Property(b => b.ReturnDate).HasColumnName("ReturnDate");
+    }
 }
+
